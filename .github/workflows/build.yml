@@ -2,7 +2,7 @@
  "name": "Build iOS IPA",
  "jobs": {
   "build": {
-   "runs-on": "macos-14",
+   "runs-on": "macos-15",
    "env": {
     "GODOT_VERSION": "4.3"
    },
