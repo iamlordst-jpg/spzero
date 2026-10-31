@@ -24,6 +24,18 @@ jobs:
             mv game_inner game
           fi
 
+      - name: Add optional models and sounds
+        shell: bash
+        run: |
+          mkdir -p game/models game/sfx
+          for f in player.glb enemy.glb; do
+            if [ -f "$f" ]; then cp "$f" game/models/; fi
+          done
+          for f in sfx_*.wav sfx_*.ogg sfx_*.mp3; do
+            if [ -f "$f" ]; then cp "$f" game/sfx/; fi
+          done
+          ls game/models game/sfx
+
       - name: Install Godot and export templates
         shell: bash
         run: |
