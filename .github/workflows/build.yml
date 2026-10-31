@@ -1,0 +1,72 @@
+name: Build iOS IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      GODOT_VERSION: "4.3"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        shell: bash
+        run: |
+          unzip -q project.zip -d game
+          if [ ! -f game/project.godot ]; then
+            P=$(find game -maxdepth 2 -name project.godot | head -1)
+            [ -n "$P" ] || { echo "project.godot not found in zip"; exit 1; }
+            mv "$(dirname "$P")" game_inner
+            rm -rf game
+            mv game_inner game
+          fi
+
+      - name: Install Godot and export templates
+        shell: bash
+        run: |
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fL -o godot.zip "$BASE/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          curl -fL -o templates.tpz "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q godot.zip
+          T="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$T"
+          unzip -q templates.tpz -d tpl
+          mv tpl/templates/* "$T/"
+
+      - name: Export Xcode project
+        shell: bash
+        working-directory: game
+        run: |
+          GODOT="$GITHUB_WORKSPACE/Godot.app/Contents/MacOS/Godot"
+          "$GODOT" --headless --import || true
+          mkdir -p build/ios
+          "$GODOT" --headless --export-release "iOS" build/ios/ZeroBurst.ipa || true
+          ls -R build/ios | head -40
+          test -d build/ios/ZeroBurst.xcodeproj
+
+      - name: Build unsigned app
+        shell: bash
+        working-directory: game/build/ios
+        run: |
+          xcodebuild -project ZeroBurst.xcodeproj -target ZeroBurst \
+            -configuration Release -sdk iphoneos SYMROOT="$PWD/out" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" \
+            build
+
+      - name: Package IPA
+        shell: bash
+        run: |
+          APP=$(find game/build/ios/out -maxdepth 3 -name "*.app" | head -1)
+          echo "Found: $APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qr ZeroBurst.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZeroBurst-ipa
+          path: ZeroBurst.ipa
